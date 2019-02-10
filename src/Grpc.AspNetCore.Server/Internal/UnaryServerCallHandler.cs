@@ -21,6 +21,7 @@ using System.Buffers;
 using System.IO.Pipelines;
 using System.Threading.Tasks;
 using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,12 +38,14 @@ namespace Grpc.AspNetCore.Server.Internal
         private delegate Task<TResponse> UnaryServerMethod(TService service, TRequest request, ServerCallContext serverCallContext);
 
         private readonly UnaryServerMethod _invoker;
+        private readonly Interceptor _interceptor;
 
-        public UnaryServerCallHandler(Method<TRequest, TResponse> method) : base(method)
+        public UnaryServerCallHandler(Method<TRequest, TResponse> method, Interceptor interceptor = null) : base(method)
         {
             var handlerMethod = typeof(TService).GetMethod(Method.Name);
 
             _invoker = (UnaryServerMethod)Delegate.CreateDelegate(typeof(UnaryServerMethod), handlerMethod);
+            _interceptor = interceptor;
         }
 
         public override async Task HandleCallAsync(HttpContext httpContext)
@@ -64,10 +67,20 @@ namespace Grpc.AspNetCore.Server.Internal
             TResponse response;
             using (serverCallContext)
             {
-                response = await _invoker(
-                    service,
-                    request,
-                    serverCallContext);
+                if (_interceptor != null)
+                {
+                    response = await _interceptor.UnaryServerHandler(
+                        request,
+                        serverCallContext,
+                        (r, sc) => _invoker(service, r, sc));
+                }
+                else
+                {
+                    response = await _invoker(
+                       service,
+                       request,
+                       serverCallContext);
+                }
             }
 
             // TODO(JunTaoLuo, JamesNK): make sure the response is not null

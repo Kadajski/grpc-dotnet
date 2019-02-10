@@ -19,6 +19,7 @@
 using System;
 using System.Collections.Generic;
 using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 
@@ -27,12 +28,14 @@ namespace Grpc.AspNetCore.Server.Internal
     internal class GrpcServiceBinder<TService> : ServiceBinderBase where TService : class
     {
         private readonly IEndpointRouteBuilder _builder;
+        private readonly Interceptor _interceptor;
 
         internal IList<IEndpointConventionBuilder> EndpointConventionBuilders { get; } = new List<IEndpointConventionBuilder>();
 
-        internal GrpcServiceBinder(IEndpointRouteBuilder builder)
+        internal GrpcServiceBinder(IEndpointRouteBuilder builder, Interceptor interceptor)
         {
             _builder = builder ?? throw new ArgumentNullException(nameof(builder));
+            _interceptor = interceptor;
         }
 
         public override void AddMethod<TRequest, TResponse>(Method<TRequest, TResponse> method, ClientStreamingServerMethod<TRequest, TResponse> handler)
@@ -54,8 +57,8 @@ namespace Grpc.AspNetCore.Server.Internal
         }
 
         public override void AddMethod<TRequest, TResponse>(Method<TRequest, TResponse> method, UnaryServerMethod<TRequest, TResponse> handler)
-        {
-            var callHandler = new UnaryServerCallHandler<TRequest, TResponse, TService>(method);
+        {            
+            var callHandler = new UnaryServerCallHandler<TRequest, TResponse, TService>(method, _interceptor);
             EndpointConventionBuilders.Add(_builder.MapPost(method.FullName, callHandler.HandleCallAsync));
         }
     }

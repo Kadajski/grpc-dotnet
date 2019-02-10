@@ -19,6 +19,7 @@
 using System;
 using Grpc.AspNetCore.Server.Internal;
 using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 
@@ -26,7 +27,16 @@ namespace Microsoft.Extensions.DependencyInjection
 {
     public static class GrpcEndpointRouteBuilderExtensions
     {
-        public static IEndpointConventionBuilder MapGrpcService<TService>(this IEndpointRouteBuilder builder) where TService : class
+        public static IEndpointConventionBuilder MapGrpcService<TService>(this IEndpointRouteBuilder builder) where TService : class => MapGrpcService<TService>(builder, interceptor: null);
+
+        public static IEndpointConventionBuilder MapGrpcService<TService>(this IEndpointRouteBuilder builder, Func<Interceptor, Interceptor> interceptCall) where TService : class
+        {
+            Interceptor baseInterceptor = new EmptyInterceptor();
+            baseInterceptor = interceptCall(baseInterceptor);
+            return MapGrpcService<TService>(builder, interceptor: baseInterceptor);
+        }
+
+        private static IEndpointConventionBuilder MapGrpcService<TService>(this IEndpointRouteBuilder builder, Interceptor interceptor) where TService : class
         {
             if (builder == null)
             {
@@ -58,8 +68,7 @@ namespace Microsoft.Extensions.DependencyInjection
                     throw new InvalidOperationException($"Cannot locate BindService(ServiceBinderBase, ServiceBase) method for the current service type: {service.FullName}. The type must be an implementation of a gRPC service.");
                 }
 
-                var serviceBinder = new GrpcServiceBinder<TService>(builder);
-
+                var serviceBinder = new GrpcServiceBinder<TService>(builder, interceptor);
                 // Invoke
                 bindService.Invoke(null, new object[] { serviceBinder, null });
 

@@ -16,10 +16,15 @@
 
 #endregion
 
+using System;
+using System.Threading.Tasks;
 using Grpc.AspNetCore;
+using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GRPCServer
 {
@@ -36,12 +41,35 @@ namespace GRPCServer
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env)
         {
-            app.UseRouting(routes =>
-            {
-                routes.MapGrpcService<ChatterService>();
-                routes.MapGrpcService<CounterService>();
-                routes.MapGrpcService<GreeterService>();
-            });
+            app
+                .UseRouting(routes =>
+                {
+                    routes.MapGrpcService<ChatterService>();
+                    routes.MapGrpcService<CounterService>(call => call.Intercept(new TestInterceptor()).Intercept(new TestInterceptor2()));
+                    routes.MapGrpcService<GreeterService>();
+                });
+        }
+    }
+
+    public class TestInterceptor : Interceptor
+    {
+        public override async Task<TResponse> UnaryServerHandler<TRequest, TResponse>(TRequest request, ServerCallContext context, UnaryServerMethod<TRequest, TResponse> continuation)
+        {
+            Console.WriteLine($"Begin: {request}. {nameof(TestInterceptor)}");
+            var response = await base.UnaryServerHandler(request, context, continuation);
+            Console.WriteLine($"End: {response}. {nameof(TestInterceptor)}");
+            return response;
+        }
+    }
+
+    public class TestInterceptor2 : Interceptor
+    {
+        public override async Task<TResponse> UnaryServerHandler<TRequest, TResponse>(TRequest request, ServerCallContext context, UnaryServerMethod<TRequest, TResponse> continuation)
+        {
+            Console.WriteLine($"Begin: {request}. {nameof(TestInterceptor2)}");
+            var response = await base.UnaryServerHandler(request, context, continuation);
+            Console.WriteLine($"End: {response}. {nameof(TestInterceptor2)}");
+            return response;
         }
     }
 }
